@@ -1,0 +1,39 @@
+read_file -format sverilog { ./eBike.sv ./reset_synch.sv ./A2D_intf.sv ./SPI_mnrch.sv ./inert_intf.sv ./sensorCondition.sv ./desiredDrive.sv ./telemetry.sv ./cadence_filt.sv ./cadence_meas.sv ./cadence_LU.sv ./mtr_drv.sv ./PID.sv ./brushless.sv ./PWM.sv ./UART_tx.sv ./inertial_integrator.sv ./nonoverlap.sv ./PB_intf.sv ./registers.sv}
+set current_design eBike
+link
+
+## constraining clk of 400MHz
+create_clock -name "clk" -period 2.5 -waveform  {0 1.25} {clk}
+set_dont_touch_network [find port clk]
+set_fix_hold clk
+
+## setting input delay
+set prim_inputs [remove_from_collection [all_inputs] [find port clk]]
+set_input_delay -clock clk 0.3 $prim_inputs
+
+## set drive strength of inputs
+set prim_inputs_norstn [remove_from_collection [copy_collection $prim_inputs] [find port rst_n]]
+set_driving_cell -lib_cell NAND2X2_LVT -library saed32lvt_tt0p85v25c $prim_inputs_norstn
+
+## output delay constraints
+set_output_delay -clock clk 0.5 [all_outputs]
+set_load 0.05 [all_outputs]
+
+## Misc Constraints
+set_wire_load_model -name 16000 -library saed32lvt_tt0p85v25c
+set_max_transition 0.20 [current_design]
+set_clock_uncertainty 0.15 clk
+
+## compile without flattening and then flatten and recompile
+compile -map_effort high
+write -format verilog eBike -output eBike.vg
+ungroup -all -flatten
+compile -map_effort high
+
+## generate reports
+report_timing -delay min > min.txt
+report_timing -delay max > max.txt
+report_area > area.txt
+
+## eBike.vg
+write -format verilog eBike -output eBike_flat.vg
